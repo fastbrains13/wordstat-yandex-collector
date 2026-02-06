@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Wordstat Word Collector",
-  "version": "0.3.0",
+  "version": "0.3.5",
   "description": "Collect words from Yandex Wordstat with +/- toggles and a draggable widget. Local storage only.",
   "icons": {
     "16": "icons/icon16.png",

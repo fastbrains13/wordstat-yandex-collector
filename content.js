@@ -59,6 +59,41 @@
     return (phrase || "").split(/\s+/).filter(t => t.length > 0);
   }
 
+  function getPhraseFromHref(el) {
+    try {
+      if (!el || !el.getAttribute) return "";
+      const href = el.getAttribute("href") || "";
+      if (!href) return "";
+      // Wordstat links often contain ?words=...
+      const u = new URL(href, location.origin);
+      const w = u.searchParams.get("words") || u.searchParams.get("word") || "";
+      if (!w) return "";
+      return decodeURIComponent(w).replace(/\+/g, " ").trim();
+    } catch (_) {
+      return "";
+    }
+  }
+
+  function getCurrentPhrase(el) {
+    // Prefer href-derived phrase when available (SPA updates href even if text was modified by us).
+    const fromHref = getPhraseFromHref(el);
+    if (fromHref) return fromHref;
+
+    // Fallback: plain text content without our +/- controls
+    const txt = (el.textContent || "").replace(/[+−-]/g, " ").replace(/\s+/g, " ").trim();
+    return txt;
+  }
+
+  function scheduleScanBurst() {
+    // Run several scans in a short burst to catch async SPA renders.
+    const delays = [0, 120, 300, 700, 1200];
+    delays.forEach((ms) => setTimeout(() => {
+      try { scanAndInject(); } catch(_) {}
+    }, ms));
+  }
+
+
+
   function rebuildIndex() {
     baseSet = new Set();
     baseToStored = new Map();
@@ -506,15 +541,26 @@
   }
 
   function processPhraseAnchor(a) {
-    if (!a || a.dataset.wcProcessed === "1") return;
-    const phrase = (a.textContent || "").trim();
-    if (!phrase) return;
+    if (!a) return;
 
-    const parts = splitWords(phrase);
+    const phraseNow = getCurrentPhrase(a);
+    if (!phraseNow) return;
+
+    const hasTokens = !!(a.querySelector && a.querySelector(".wc-token"));
+
+    // If already processed and phrase didn't change, keep it.
+    if (a.dataset.wcProcessed === "1" && hasTokens && a.dataset.wcPhrase === phraseNow) {
+      return;
+    }
+
+    const parts = splitWords(phraseNow);
     if (parts.length <= 1) return;
 
+    // Mark & rebuild
     a.dataset.wcProcessed = "1";
+    a.dataset.wcPhrase = phraseNow;
 
+    // Replace contents with tokenized words (rebuild even if tokens existed)
     a.textContent = "";
     for (let i = 0; i < parts.length; i++) {
       const token = makeTokenNode(parts[i]);
@@ -525,17 +571,21 @@
   }
 
   function scanAndInject() {
-    const anchors = document.body.querySelectorAll("a");
-    anchors.forEach(a => {
-      if (a.closest("#wc-widget")) return;
-      const txt = (a.textContent || "").trim();
-      if (!txt) return;
-      if (txt.length > 80) return;
-      if (!/\s/.test(txt)) return;
-      if (txt.split(/\s+/).length < 2) return;
-      if (a.closest("header, nav")) return;
+    const root = document.querySelector(".wordstat__search-result-content-wrapper");
+    if (!root) return;
 
-      processPhraseAnchor(a);
+    const candidates = root.querySelectorAll("a, span");
+    candidates.forEach((el) => {
+      if (!el) return;
+      if (el.closest && el.closest("#wc-widget")) return;
+
+      const phrase = getCurrentPhrase(el);
+      if (!phrase) return;
+      if (phrase.length > 120) return;
+      if (!/\s/.test(phrase)) return;
+      if (phrase.split(/\s+/).length < 2) return;
+
+      processPhraseAnchor(el);
     });
   }
 
@@ -590,6 +640,36 @@
 
       scanAndInject();
       installObserver();
+  // SPA/navigation hooks
+  (function installNavHooks(){
+    let lastUrl = location.href;
+    const check = () => {
+      if (location.href !== lastUrl) {
+        lastUrl = location.href;
+        scheduleScanBurst();
+      }
+    };
+    // Patch history methods
+    const _pushState = history.pushState;
+    const _replaceState = history.replaceState;
+    history.pushState = function(){ const r=_pushState.apply(this, arguments); check(); return r; };
+    history.replaceState = function(){ const r=_replaceState.apply(this, arguments); check(); return r; };
+    window.addEventListener('popstate', () => check(), true);
+
+    // When user submits search, run burst (Wordstat may update without URL change immediately)
+    document.addEventListener('click', (e) => {
+      const t = e.target;
+      if (!t) return;
+      const btn = t.closest ? t.closest('button') : null;
+      if (btn && (btn.type === 'submit' || btn.getAttribute('aria-label') === 'Найти' || btn.getAttribute('data-testid') === 'search')) {
+        scheduleScanBurst();
+      }
+    }, true);
+
+    // Periodic lightweight check (failsafe)
+    setInterval(check, 1200);
+  })();
+
       updateAllTokensUI();
     });
   }
