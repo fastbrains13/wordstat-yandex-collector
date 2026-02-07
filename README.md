@@ -92,11 +92,17 @@ https://wordstat.yandex.ru/
 
 ## 📦 Установка
 
-### Opera / Chrome / Яндекс Браузер
+### Выберите браузер, для которого необходимо установить
 
-[Яндекс Браузер / Opera](https://addons.opera.com/ru/extensions/details/yandex-wordstat-word-collector/)
+|  |  |
+|--------|-----------|
+| <img src="https://raw.githubusercontent.com/alrra/browser-logos/main/src/chrome/chrome_48x48.png" alt="Google Chrome" /> |  [Скачать расширение](https://chromewebstore.google.com/detail/wordstat-word-collector/fdhfmhpchcmjhmnenmagicnihppahpif)|
+| <img src="https://raw.githubusercontent.com/alrra/browser-logos/main/src/opera/opera_48x48.png" alt="Opera" /> | [Скачать расширение](https://addons.opera.com/ru/extensions/details/yandex-wordstat-word-collector/) |
+| <img src="https://raw.githubusercontent.com/alrra/browser-logos/main/src/yandex/yandex_48x48.png" alt="Яндекс Браузер" /> | [Скачать расширение](https://addons.opera.com/ru/extensions/details/yandex-wordstat-word-collector/) |
+| <img src="https://raw.githubusercontent.com/alrra/browser-logos/main/src/firefox/firefox_48x48.png" alt="Mozilla Firefox" /> | _В процессе модерации_ |
 
-Также вы можете установить его вручную:
+
+### Также вы можете установить его вручную:
 
 1. Скачайте готовый архив расширения по ссылке ниже  
 2. Распакуйте архив на компьютере  
@@ -111,7 +117,7 @@ https://wordstat.yandex.ru/
 
 🔗 **Скачать последнюю версию:**  
 
-[Скачать архив расширения](https://github.com/user-attachments/files/25125217/wordstat-yandex-collector-0.3.5.zip)
+[Скачать актуальную версию расширения](https://github.com/fastbrains13/wordstat-yandex-collector/releases)
 
 
 ---
