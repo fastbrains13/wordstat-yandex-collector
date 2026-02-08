@@ -13,14 +13,23 @@
 }
 
 #wc-widget .wc-header{
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: block;
   padding: 10px 10px;
   cursor: grab;
   user-select: none;
   background: #f6f7f8;
   border-bottom: 1px solid rgba(0,0,0,.08);
+}
+
+#wc-widget .wc-header-top{
+  display:flex;
+  align-items:center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+#wc-widget .wc-header-bottom{
+  margin-top: 8px;
 }
 
 #wc-widget.wc-widget--dragging .wc-header{ cursor: grabbing; }
@@ -50,6 +59,38 @@
   display:flex;
   align-items:center;
   gap:6px;
+}
+
+/* Modes (segmented control) */
+#wc-widget .wc-modes{
+  display:flex;
+  align-items:center;
+  gap:2px;
+  padding: 2px;
+  border: 1px solid rgba(0,0,0,.12);
+  background: rgba(255,255,255,.8);
+  border-radius: 12px;
+  width: 100%;
+}
+
+#wc-widget .wc-mode-btn{
+  border: none;
+  background: transparent;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 6px 6px;
+  border-radius: 10px;
+  cursor: pointer;
+  opacity: .65;
+  white-space: nowrap;
+  flex: 1 1 0;
+  text-align: center;
+}
+
+#wc-widget .wc-mode-btn--active{
+  background: #111;
+  color: #fff;
+  opacity: 1;
 }
 
 #wc-widget .wc-icon-btn{
@@ -263,10 +304,129 @@
   font-size: 14px;
   line-height: 1;
   padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
 }
 
 .wc-token.wc-token--selected{
   opacity: .45; /* light gray highlight effect */
+}
+
+/* Phrase-level actions */
+.wc-phrase-actions{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  margin-right: 8px;
+  margin-left: 0;
+  vertical-align: middle;
+}
+
+.wc-phrase-warn{
+  font-size: 12px;
+  line-height: 1;
+  opacity: .9;
+}
+
+.wc-phrase-btn{
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  border: 1px solid rgba(0,0,0,.18);
+  background: #fff;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+}
+
+.wc-phrase-actions--added .wc-phrase-btn{
+  background: #111;
+  color: #fff;
+  border-color: #111;
+}
+
+/* Modal */
+.wc-modal-backdrop{
+  position: fixed;
+  inset: 0;
+  z-index: 2147483647;
+  background: rgba(0,0,0,.35);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding: 18px;
+}
+
+.wc-modal{
+  width: min(380px, 100%);
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid rgba(0,0,0,.12);
+  box-shadow: 0 20px 60px rgba(0,0,0,.25);
+  overflow: hidden;
+  font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,Arial,sans-serif;
+  color:#111;
+}
+
+.wc-modal-hd{
+  padding: 12px 12px;
+  font-size: 14px;
+  font-weight: 800;
+  background: #f6f7f8;
+  border-bottom: 1px solid rgba(0,0,0,.08);
+}
+
+.wc-modal-bd{
+  padding: 12px;
+  display:flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.wc-modal-ft{
+  padding: 12px;
+  display:flex;
+  gap: 10px;
+  justify-content:flex-end;
+  border-top: 1px solid rgba(0,0,0,.08);
+}
+
+.wc-modal-txt{
+  font-size: 12px;
+  opacity: .85;
+}
+
+.wc-chips{ display:flex; flex-wrap: wrap; gap:6px; }
+.wc-chip{
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(0,0,0,.14);
+  background: #fff;
+}
+
+.wc-phrasebox{
+  font-size: 12px;
+  padding: 10px;
+  border-radius: 12px;
+  border: 1px solid rgba(0,0,0,.12);
+  background: #fafafa;
+}
+
+.wc-check-row{
+  display:flex;
+  align-items:flex-start;
+  gap: 8px;
+  font-size: 12px;
+  opacity: .9;
 }
 
 
