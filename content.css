@@ -2,7 +2,7 @@
 #wc-widget.wc-widget{
   position: fixed;
   z-index: 2147483647;
-  width: 300px;
+  width: 250px;
   border: 1px solid rgba(0,0,0,.14);
   border-radius: 14px;
   background: #fff;

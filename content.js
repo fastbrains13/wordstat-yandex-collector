@@ -284,7 +284,7 @@
     const widget = document.createElement("div");
     widget.id = "wc-widget";
     widget.className = "wc-widget";
-    widget.style.left = `${widgetPos.x}px`;
+    widget.style.left = `0px`;
     widget.style.top = `${widgetPos.y}px`;
 
     const header = document.createElement("div");
@@ -296,7 +296,7 @@
           <span>Word Collector</span>
           <span class="wc-count" id="wc-count">0</span>
         </div>
-        <button class="wc-icon-btn" id="wc-toggle" title="Свернуть/развернуть">—</button>
+        <button class="wc-icon" id="wc-toggle" title="Свернуть/развернуть">—</button>
       </div>
 
       <div class="wc-header-bottom">
