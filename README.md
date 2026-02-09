@@ -134,7 +134,7 @@ https://wordstat.yandex.ru/
 | <img src="https://raw.githubusercontent.com/alrra/browser-logos/main/src/chrome/chrome_48x48.png" alt="Google Chrome" /> | [Скачать расширение](https://chromewebstore.google.com/detail/wordstat-word-collector/fdhfmhpchcmjhmnenmagicnihppahpif) |
 | <img src="https://raw.githubusercontent.com/alrra/browser-logos/main/src/opera/opera_48x48.png" alt="Opera" /> | [Скачать расширение](https://addons.opera.com/ru/extensions/details/yandex-wordstat-word-collector/) |
 | <img src="https://raw.githubusercontent.com/alrra/browser-logos/main/src/yandex/yandex_48x48.png" alt="Яндекс Браузер" /> | [Скачать расширение](https://addons.opera.com/ru/extensions/details/yandex-wordstat-word-collector/) |
-| <img src="https://raw.githubusercontent.com/alrra/browser-logos/main/src/firefox/firefox_48x48.png" alt="Mozilla Firefox" /> | _В процессе модерации_ |
+| <img src="https://raw.githubusercontent.com/alrra/browser-logos/main/src/firefox/firefox_48x48.png" alt="Mozilla Firefox" /> | [Скачать расширение](https://addons.mozilla.org/ru/firefox/addon/wordstat-yandex-collector/)|
 
 ---
 
