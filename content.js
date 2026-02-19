@@ -1,57 +1,79 @@
 (() => {
   const STORAGE_KEYS = {
-    // legacy (<=0.3.5)
     WORDS: "wc_words",
-    // new bases
     PHRASES: "wc_phrases",
     MINUS: "wc_minus",
     POS: "wc_pos",
     COLLAPSED: "wc_collapsed",
-    SETTINGS: "wc_settings"
+    SETTINGS: "wc_settings",
+    WIDTH: "wc_width"
   };
 
-  // Change this to your public repo before publishing
   const GITHUB_URL = "https://github.com/fastbrains13/wordstat-yandex-collector";
 
-  // ---------- Settings ----------
   const defaultSettings = {
-    stripPlusInPhrases: false, // "удалять + из фраз"
-    addBangPrefix: false,      // добавлять "!" при добавлении
-    addPlusPrefix: false,      // добавлять "+" при добавлении
-    // UI / modes
-    mode: "phrases",          // "phrases" | "minus" (default = key phrases)
+    stripPlusInPhrases: false,
+    addBangPrefix: false,
+    addPlusPrefix: false,
+    includeFrequencyInPhrases: true,
+    copyWithFrequency: true,
+    wrapPhraseWithBrackets: false,
+    wrapWordsWithBrackets: false,
+    mode: "phrases",
     dontAskUntilPhrasesCleared: false,
     shiftHotkeyEnabled: true
   };
 
   let settings = { ...defaultSettings };
 
-  // ---------- Data ----------
-  let phrases = [];               // stored key phrases
-  let minusWords = [];            // stored minus words (may include !/+ prefixes)
-
-  // legacy (<=0.3.5) words list (used for one-time migration)
+  let phrases = [];
+  let minusWords = [];
   let words = [];
-  let widgetPos = { x: 24, y: 120 };
+  let widgetPos = { x: 0, y: 120 };
+  let widgetWidth = 250;
+  let hasManualWidth = false;
   let isCollapsed = false;
 
-  // Derived fast lookup
-  let phraseSet = new Set();      // normalized phrase
-  let minusSet = new Set();       // normalized minus key (without !/+)
-  let minusToStored = new Map();  // normalized -> stored string
+  let phraseSet = new Set();
+  let minusSet = new Set();
+  let minusToStored = new Map();
 
-  // Shift temporary mode
   let shiftDown = false;
 
-  // ---------- Utils ----------
   function normalizeBase(word) {
-    // Used to detect duplicates and highlight tokens.
-    // Strips leading operator chars that we add in this tool.
     return String(word || "").replace(/^[!+]+/g, "");
   }
 
   function normalizePhrase(s) {
     return String(s || "").replace(/\s+/g, " ").trim();
+  }
+
+  function parseStoredPhrase(phrase) {
+    const normalized = normalizePhrase(phrase);
+    const match = normalized.match(/^(.*?)(?:\s*\(([\d\s ]+)\))?$/);
+    const rawBase = normalizePhrase(match ? match[1] : normalized);
+    const base = splitWords(rawBase)
+      .map((word) => word.replace(/^\[(.*)\]$/, "$1"))
+      .join(" ");
+    const frequency = match && match[2] ? match[2].replace(/\s+/g, "") : "";
+    return { base: normalizePhrase(base), displayBase: rawBase, frequency };
+  }
+
+  function formatPhraseForStorage(basePhrase, frequency) {
+    let value = normalizePhrase(basePhrase);
+    if (!value) return "";
+
+    if (settings.wrapWordsWithBrackets) {
+      value = splitWords(value).map((word) => `[${word}]`).join(" ");
+    } else if (settings.wrapPhraseWithBrackets) {
+      value = `[${value}]`;
+    }
+
+    if (settings.includeFrequencyInPhrases && frequency) {
+      value = `${value} (${frequency})`;
+    }
+
+    return value;
   }
 
   function normalizeMinusKey(s) {
@@ -60,14 +82,12 @@
 
   function applyPrefixes(baseWord) {
     let w = baseWord;
-    // Order: first "!" then "+"
     if (settings.addBangPrefix && !w.startsWith("!")) w = "!" + w;
     if (settings.addPlusPrefix && !w.startsWith("+")) w = "+" + w;
     return w;
   }
 
   function tokenKeyFromRaw(raw) {
-    // "удалять + из фраз": affects tokens extracted from Wordstat phrases (e.g. "+в" -> "в")
     if (settings.stripPlusInPhrases) {
       return String(raw || "").replace(/^\++/g, "");
     }
@@ -75,7 +95,6 @@
   }
 
   function tokenDisplayFromRaw(raw) {
-    // Display is the same as key in our UX (clean if stripPlusInPhrases is enabled)
     return tokenKeyFromRaw(raw);
   }
 
@@ -88,7 +107,6 @@
       if (!el || !el.getAttribute) return "";
       const href = el.getAttribute("href") || "";
       if (!href) return "";
-      // Wordstat links often contain ?words=...
       const u = new URL(href, location.origin);
       const w = u.searchParams.get("words") || u.searchParams.get("word") || "";
       if (!w) return "";
@@ -99,20 +117,32 @@
   }
 
   function getCurrentPhrase(el) {
-    // Prefer href-derived phrase when available (SPA updates href even if text was modified by us).
     const fromHref = getPhraseFromHref(el);
     if (fromHref) return fromHref;
 
-    // Fallback: plain text content without our +/- controls
     const txt = (el.textContent || "").replace(/[+−-]/g, " ").replace(/\s+/g, " ").trim();
     return txt;
   }
 
+  // Забираем частотность фразы из строки таблицы Wordstat.
+  function getPhraseFrequency(el) {
+    const row = el && el.closest ? el.closest("tr") : null;
+    if (!row) return "";
+    const cells = Array.from(row.querySelectorAll("td"));
+    for (let i = cells.length - 1; i >= 0; i -= 1) {
+      const raw = (cells[i].textContent || "").replace(/ /g, " ").trim();
+      if (!raw) continue;
+      if (/^\d[\d\s]*$/.test(raw)) {
+        return raw.replace(/\s+/g, "");
+      }
+    }
+    return "";
+  }
+
   function scheduleScanBurst() {
-    // Run several scans in a short burst to catch async SPA renders.
     const delays = [0, 120, 300, 700, 1200];
     delays.forEach((ms) => setTimeout(() => {
-      try { scanAndInject(); } catch(_) {}
+      try { scanAndInject(); updateWidgetLayout(); } catch(_) {}
     }, ms));
   }
 
@@ -120,8 +150,8 @@
 
   function rebuildPhraseIndex() {
     phraseSet = new Set();
-    for (const p of phrases) {
-      const key = normalizePhrase(p);
+    for (const phrase of phrases) {
+      const key = parseStoredPhrase(phrase).base;
       if (key) phraseSet.add(key);
     }
   }
@@ -144,21 +174,22 @@
   function savePos() { chrome.storage.local.set({ [STORAGE_KEYS.POS]: widgetPos }); }
   function saveCollapsed() { chrome.storage.local.set({ [STORAGE_KEYS.COLLAPSED]: isCollapsed }); }
   function saveSettings() { chrome.storage.local.set({ [STORAGE_KEYS.SETTINGS]: settings }); }
+  function saveWidth() { chrome.storage.local.set({ [STORAGE_KEYS.WIDTH]: { width: widgetWidth, manual: hasManualWidth } }); }
 
   function effectiveMode() {
-    // Shift works only when base mode is "phrases" and hotkey enabled.
     if (settings.shiftHotkeyEnabled && settings.mode === "phrases" && shiftDown) return "minus";
     return settings.mode;
   }
 
-  function addPhrase(phrase) {
+  function addPhrase(phrase, frequency = "") {
     const key = normalizePhrase(phrase);
     if (!key) return;
     if (phraseSet.has(key)) {
-      flashToast("Уже добавлено");
       return;
     }
-    phrases.push(key);
+    const stored = formatPhraseForStorage(key, frequency);
+    if (!stored) return;
+    phrases.push(stored);
     rebuildPhraseIndex();
     renderWidgetList();
     updateAllTokensUI();
@@ -169,7 +200,7 @@
   function removePhrase(phrase) {
     const key = normalizePhrase(phrase);
     if (!key || !phraseSet.has(key)) return;
-    phrases = phrases.filter(p => normalizePhrase(p) !== key);
+    phrases = phrases.filter((storedPhrase) => parseStoredPhrase(storedPhrase).base !== key);
     rebuildPhraseIndex();
     renderWidgetList();
     updateAllPhraseActionsUI();
@@ -180,7 +211,6 @@
     const b = normalizeMinusKey(wordBase);
     if (!b) return;
     if (minusSet.has(b)) {
-      flashToast("Уже добавлено");
       return;
     }
     const stored = applyPrefixes(normalizeBase(wordBase));
@@ -205,12 +235,11 @@
   }
 
   function removeStoredItem(storedValue) {
-    // remove from active list
     if (settings.mode === "phrases") {
-      phrases = phrases.filter(x => x !== storedValue);
+      const basePhrase = parseStoredPhrase(storedValue).base;
+      phrases = phrases.filter((value) => parseStoredPhrase(value).base !== basePhrase);
       rebuildPhraseIndex();
       savePhrases();
-      // clearing phrases does not happen here
     } else {
       minusWords = minusWords.filter(x => x !== storedValue);
       rebuildMinusIndex();
@@ -226,7 +255,6 @@
       phrases = [];
       rebuildPhraseIndex();
       savePhrases();
-      // IMPORTANT: reset "dont ask" only when phrases are cleared
       settings.dontAskUntilPhrasesCleared = false;
       saveSettings();
     } else {
@@ -239,11 +267,24 @@
     updateAllPhraseActionsUI();
   }
 
+  function makeCopyText() {
+    if (settings.mode !== "phrases") return minusWords.join("\n");
+
+    if (settings.copyWithFrequency) {
+      return phrases.map((stored) => {
+        const parsed = parseStoredPhrase(stored);
+        return parsed.frequency ? `${parsed.displayBase}\t${parsed.frequency}` : parsed.displayBase;
+      }).join("\n");
+    }
+
+    return phrases.map((stored) => parseStoredPhrase(stored).displayBase).join("\n");
+  }
+
   async function copyActiveList() {
-    const text = (settings.mode === "phrases" ? phrases : minusWords).join("\n");
+    const text = makeCopyText();
     try {
       await navigator.clipboard.writeText(text);
-      flashToast("Скопировано");
+      flashToast(settings.mode === "phrases" ? "Все фразы скопированы" : "Все минус-слова скопированы");
     } catch (e) {
       const ta = document.createElement("textarea");
       ta.value = text;
@@ -253,7 +294,7 @@
       ta.select();
       document.execCommand("copy");
       document.body.removeChild(ta);
-      flashToast("Скопировано");
+      flashToast(settings.mode === "phrases" ? "Все фразы скопированы" : "Все минус-слова скопированы");
     }
   }
 
@@ -277,14 +318,13 @@
     toastTimer = setTimeout(() => t.classList.remove("wc-toast--show"), 900);
   }
 
-  // ---------- Widget UI ----------
   function buildWidget() {
     if (document.getElementById("wc-widget")) return;
 
     const widget = document.createElement("div");
     widget.id = "wc-widget";
     widget.className = "wc-widget";
-    widget.style.left = `0px`;
+    widget.style.left = `${widgetPos.x}px`;
     widget.style.top = `${widgetPos.y}px`;
 
     const header = document.createElement("div");
@@ -293,7 +333,7 @@
       <div class="wc-header-top">
         <div class="wc-title">
           <span class="wc-dot"></span>
-          <span>Word Collector</span>
+          <span>Wordstat Yandex Collector</span>
           <span class="wc-count" id="wc-count">0</span>
         </div>
         <button class="wc-icon" id="wc-toggle" title="Свернуть/развернуть">—</button>
@@ -381,6 +421,27 @@
           <div class="wc-panel-hint">Отключение не удаляет <b>+</b> у уже добавленных слов.</div>
 
           <label class="wc-check">
+            <input type="checkbox" id="wc-set-frequency" />
+            <span>Добавлять частотность фразы в скобках</span>
+          </label>
+
+          <label class="wc-check">
+            <input type="checkbox" id="wc-set-copy-frequency" />
+            <span>Копировать фразы с частотностью (табами для Excel)</span>
+          </label>
+
+          <label class="wc-check">
+            <input type="checkbox" id="wc-set-wrap-phrase" />
+            <span>Оборачивать фразу в квадратные скобки</span>
+          </label>
+
+          <label class="wc-check">
+            <input type="checkbox" id="wc-set-wrap-words" />
+            <span>Оборачивать каждое слово фразы в квадратные скобки</span>
+          </label>
+          <div class="wc-panel-hint">Если включить обе опции, приоритет у оборачивания каждого слова.</div>
+
+          <label class="wc-check">
             <input type="checkbox" id="wc-set-shift" />
             <span>Shift — быстрый сбор минус-слов (удерживать)</span>
           </label>
@@ -398,7 +459,7 @@
       </div>
 
       <div class="wc-footer">
-  <div class="wc-footer-text"><b>Word Collector</b> — открытый и бесплатный инструмент для сбора семантики в Яндекс Wordstat. Все данные хранятся <b>исключительно локально</b> в вашем браузере и никуда не передаются. Проект развивается открыто: обновления и поддержка доступны бесплатно.</div>
+  <div class="wc-footer-text"><b>Wordstat Yandex Collector</b> — открытый и бесплатный инструмент для сбора семантики в Яндекс Wordstat. Все данные хранятся <b>исключительно локально</b> в вашем браузере и никуда не передаются. Проект развивается открыто: обновления и поддержка доступны бесплатно.</div>
   <a class="wc-footer-link" href="${GITHUB_URL}" target="_blank" rel="noreferrer">GitHub</a>
 </div>
     `;
@@ -412,13 +473,11 @@
     widget.appendChild(toast);
     document.body.appendChild(widget);
 
-    // Toolbar actions
     widget.querySelector("#wc-copy").addEventListener("click", copyActiveList);
     widget.querySelector("#wc-clear").addEventListener("click", () => { clearActiveList(); flashToast("Очищено"); });
     widget.querySelector("#wc-settings").addEventListener("click", () => togglePanel("wc-panel-settings"));
     widget.querySelector("#wc-add").addEventListener("click", () => togglePanel("wc-panel-add"));
 
-    // Mode switch
     const modeP = widget.querySelector("#wc-mode-phr");
     const modeM = widget.querySelector("#wc-mode-min");
     modeP.addEventListener("click", () => {
@@ -436,7 +495,6 @@
       updateAllPhraseActionsUI();
     });
 
-    // Add panel actions
     widget.querySelector("#wc-add-apply").addEventListener("click", () => {
       const ta = widget.querySelector("#wc-add-input");
       const raw = (ta.value || "").trim();
@@ -449,24 +507,46 @@
       }
       ta.value = "";
       closePanels();
-      flashToast("Добавлено");
     });
     widget.querySelector("#wc-add-cancel").addEventListener("click", closePanels);
 
-    // Settings bindings
     const stripPlusEl = widget.querySelector("#wc-set-stripplus");
     const bangEl = widget.querySelector("#wc-set-bang");
     const plusEl = widget.querySelector("#wc-set-plus");
+    const frequencyEl = widget.querySelector("#wc-set-frequency");
+    const copyFrequencyEl = widget.querySelector("#wc-set-copy-frequency");
+    const wrapPhraseEl = widget.querySelector("#wc-set-wrap-phrase");
+    const wrapWordsEl = widget.querySelector("#wc-set-wrap-words");
     const shiftEl = widget.querySelector("#wc-set-shift");
     stripPlusEl.checked = !!settings.stripPlusInPhrases;
     bangEl.checked = !!settings.addBangPrefix;
     plusEl.checked = !!settings.addPlusPrefix;
+    if (frequencyEl) frequencyEl.checked = !!settings.includeFrequencyInPhrases;
+    if (copyFrequencyEl) copyFrequencyEl.checked = settings.copyWithFrequency !== false;
+    if (wrapPhraseEl) wrapPhraseEl.checked = !!settings.wrapPhraseWithBrackets;
+    if (wrapWordsEl) wrapWordsEl.checked = !!settings.wrapWordsWithBrackets;
     if (shiftEl) shiftEl.checked = settings.shiftHotkeyEnabled !== false;
+
+    const syncBracketControls = () => {
+      if (!wrapPhraseEl || !wrapWordsEl) return;
+      if (wrapPhraseEl.checked) {
+        wrapWordsEl.checked = false;
+        wrapWordsEl.disabled = true;
+      } else if (wrapWordsEl.checked) {
+        wrapPhraseEl.checked = false;
+        wrapPhraseEl.disabled = true;
+      } else {
+        wrapPhraseEl.disabled = false;
+        wrapWordsEl.disabled = false;
+      }
+      settings.wrapPhraseWithBrackets = !!wrapPhraseEl.checked;
+      settings.wrapWordsWithBrackets = !!wrapWordsEl.checked;
+    };
+    syncBracketControls();
 
     stripPlusEl.addEventListener("change", () => {
       settings.stripPlusInPhrases = !!stripPlusEl.checked;
       saveSettings();
-      // Update existing tokens: their display/key depends on this setting.
       refreshTokensAfterSettingChange();
       flashToast("Сохранено");
     });
@@ -483,6 +563,38 @@
       flashToast("Сохранено");
     });
 
+    if (frequencyEl) {
+      frequencyEl.addEventListener("change", () => {
+        settings.includeFrequencyInPhrases = !!frequencyEl.checked;
+        saveSettings();
+        flashToast("Сохранено");
+      });
+    }
+
+    if (copyFrequencyEl) {
+      copyFrequencyEl.addEventListener("change", () => {
+        settings.copyWithFrequency = !!copyFrequencyEl.checked;
+        saveSettings();
+        flashToast("Сохранено");
+      });
+    }
+
+    if (wrapPhraseEl) {
+      wrapPhraseEl.addEventListener("change", () => {
+        syncBracketControls();
+        saveSettings();
+        flashToast("Сохранено");
+      });
+    }
+
+    if (wrapWordsEl) {
+      wrapWordsEl.addEventListener("change", () => {
+        syncBracketControls();
+        saveSettings();
+        flashToast("Сохранено");
+      });
+    }
+
     if (shiftEl) {
       shiftEl.addEventListener("change", () => {
         settings.shiftHotkeyEnabled = !!shiftEl.checked;
@@ -495,7 +607,6 @@
 
     widget.querySelector("#wc-settings-close").addEventListener("click", closePanels);
 
-    // Prevent header drag from hijacking toggle interactions
     const toggleBtn = widget.querySelector("#wc-toggle");
     toggleBtn.addEventListener("pointerdown", (e) => { e.stopPropagation(); });
     toggleBtn.addEventListener("click", () => {
@@ -504,13 +615,13 @@
       saveCollapsed();
     });
 
-    // Dragging
+    setupResizing(widget);
     setupDragging(widget, header);
 
-    // Apply collapsed state
     widget.classList.toggle("wc-widget--collapsed", isCollapsed);
 
     renderWidgetList();
+    updateWidgetLayout();
   }
 
   function togglePanel(id) {
@@ -544,7 +655,6 @@
     const isPhrases = settings.mode === "phrases";
     const items = isPhrases ? phrases : minusWords;
 
-    // header mode UI
     if (modeP && modeM) {
       modeP.classList.toggle("wc-mode-btn--active", isPhrases);
       modeM.classList.toggle("wc-mode-btn--active", !isPhrases);
@@ -552,7 +662,6 @@
       modeM.setAttribute("aria-selected", String(!isPhrases));
     }
 
-    // add panel texts
     if (addPanelTitle) addPanelTitle.textContent = isPhrases ? "Добавить ключевые фразы" : "Добавить минус-слова";
     if (addPanelHint) addPanelHint.textContent = isPhrases
       ? "Вставь ключевые фразы столбиком или через запятую/точку с запятой."
@@ -575,6 +684,74 @@
       li.querySelector(".wc-item-del").addEventListener("click", () => removeStoredItem(stored));
       list.appendChild(li);
     }
+  }
+
+  // Автоматически подбираем ширину виджета под левую белую область страницы.
+  function updateWidgetLayout() {
+    const widget = document.getElementById("wc-widget");
+    if (!widget) return;
+
+    const resultRoot = document.querySelector(".wordstat__search-result-content-wrapper");
+    const leftSpace = resultRoot ? Math.floor(resultRoot.getBoundingClientRect().left) : 0;
+    const autoWidth = leftSpace >= 250 ? leftSpace : 250;
+    const activeWidth = hasManualWidth ? widgetWidth : autoWidth;
+
+    widget.style.width = `${activeWidth}px`;
+
+    const rect = widget.getBoundingClientRect();
+    const x = Math.max(0, Math.min(window.innerWidth - rect.width, widgetPos.x));
+    const y = Math.max(0, Math.min(window.innerHeight - rect.height, widgetPos.y));
+    widget.style.left = `${x}px`;
+    widget.style.top = `${y}px`;
+    widgetPos = { x: Math.round(x), y: Math.round(y) };
+  }
+
+  function setupResizing(widget) {
+    const handle = document.createElement("div");
+    handle.className = "wc-resize-handle";
+    widget.appendChild(handle);
+
+    let resizing = false;
+    let startX = 0;
+    let startWidth = 0;
+
+    const onMove = (e) => {
+      if (!resizing) return;
+      const dx = e.clientX - startX;
+      const nextWidth = Math.max(250, Math.min(window.innerWidth, startWidth + dx));
+      widgetWidth = Math.round(nextWidth);
+      hasManualWidth = true;
+      widget.style.width = `${widgetWidth}px`;
+      updateWidgetLayout();
+    };
+
+    const onUp = () => {
+      if (!resizing) return;
+      resizing = false;
+      window.removeEventListener("pointermove", onMove, true);
+      window.removeEventListener("pointerup", onUp, true);
+      window.removeEventListener("pointercancel", onUp, true);
+      saveWidth();
+      savePos();
+    };
+
+    handle.addEventListener("dblclick", () => {
+      hasManualWidth = false;
+      saveWidth();
+      updateWidgetLayout();
+    });
+
+    handle.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0) return;
+      resizing = true;
+      startX = e.clientX;
+      startWidth = widget.getBoundingClientRect().width;
+      window.addEventListener("pointermove", onMove, true);
+      window.addEventListener("pointerup", onUp, true);
+      window.addEventListener("pointercancel", onUp, true);
+      e.preventDefault();
+      e.stopPropagation();
+    });
   }
 
   function setupDragging(widget, handle) {
@@ -649,7 +826,6 @@
     widget.addEventListener("pointercancel", endDrag, true);
   }
 
-  // ---------- Wordstat tokens (+/-) ----------
   function makeTokenNode(rawWord) {
     const wrap = document.createElement("span");
     wrap.className = "wc-token";
@@ -669,8 +845,6 @@
       e.preventDefault();
       e.stopPropagation();
 
-      // Token buttons are used to collect minus-words.
-      // In phrases mode, they are active only while Shift is held.
       if (effectiveMode() !== "minus") return;
 
       const raw = wrap.dataset.wcWordRaw || "";
@@ -722,15 +896,14 @@
   }
 
   function refreshTokensAfterSettingChange() {
-    // Update token display & matching based on settings.stripPlusInPhrases
     updateAllTokensUI();
   }
 
-  // ---------- Phrase actions (+ / ⚠️) ----------
-  function makePhraseActionsNode(phraseText) {
+  function makePhraseActionsNode(phraseText, frequency = "") {
     const wrap = document.createElement("span");
     wrap.className = "wc-phrase-actions";
     wrap.dataset.wcPhrase = phraseText;
+    wrap.dataset.wcFrequency = frequency;
 
     const warn = document.createElement("span");
     warn.className = "wc-phrase-warn";
@@ -747,7 +920,6 @@
       e.preventDefault();
       e.stopPropagation();
 
-      // Phrase add/remove is available only in phrases mode (not in minus mode)
       if (settings.mode !== "phrases") {
         flashToast("Переключись на ключевые фразы");
         return;
@@ -759,7 +931,6 @@
 
       if (phraseSet.has(key)) {
         removePhrase(key);
-        flashToast("Удалено");
         return;
       }
 
@@ -773,8 +944,7 @@
         if (!res?.confirmed) return;
       }
 
-      addPhrase(key);
-      flashToast("Добавлено");
+      addPhrase(key, wrap.dataset.wcFrequency || "");
     });
 
     return wrap;
@@ -788,7 +958,6 @@
     const warn = wrap.querySelector(".wc-phrase-warn");
     if (!btn || !warn) return;
 
-    // show warning if phrase contains any minus word
     const hits = phraseMinusHits(phrase);
     warn.style.display = hits.length ? "inline" : "none";
     if (hits.length) {
@@ -920,7 +1089,6 @@
 
     const hasTokens = !!(a.querySelector && a.querySelector(".wc-token"));
 
-    // If already processed and phrase didn't change, keep it.
     if (a.dataset.wcProcessed === "1" && hasTokens && a.dataset.wcPhrase === phraseNow) {
       return;
     }
@@ -928,15 +1096,13 @@
     const parts = splitWords(phraseNow);
     if (parts.length <= 1) return;
 
-    // Mark & rebuild
     a.dataset.wcProcessed = "1";
     a.dataset.wcPhrase = phraseNow;
 
-    // Replace contents with tokenized words + phrase-level action
     a.textContent = "";
 
-    // Phrase-level add/remove must be on the LEFT (at the beginning of the line)
-    const actions = makePhraseActionsNode(phraseNow);
+    const frequency = getPhraseFrequency(a);
+    const actions = makePhraseActionsNode(phraseNow, frequency);
     a.appendChild(actions);
     a.appendChild(document.createTextNode(" "));
 
@@ -982,13 +1148,13 @@
           scanAndInject();
           updateAllTokensUI();
           updateAllPhraseActionsUI();
+          updateWidgetLayout();
         }, 120);
       }
     });
     obs.observe(document.body, { childList: true, subtree: true, characterData: true });
   }
 
-  // ---------- Boot ----------
   function boot() {
     chrome.storage.local.get([
       STORAGE_KEYS.PHRASES,
@@ -996,12 +1162,12 @@
       STORAGE_KEYS.WORDS,
       STORAGE_KEYS.POS,
       STORAGE_KEYS.COLLAPSED,
-      STORAGE_KEYS.SETTINGS
+      STORAGE_KEYS.SETTINGS,
+      STORAGE_KEYS.WIDTH
     ], (res) => {
       phrases = Array.isArray(res[STORAGE_KEYS.PHRASES]) ? res[STORAGE_KEYS.PHRASES] : [];
       minusWords = Array.isArray(res[STORAGE_KEYS.MINUS]) ? res[STORAGE_KEYS.MINUS] : [];
 
-      // legacy migration: old "words" list becomes minus-words if minus list empty
       words = Array.isArray(res[STORAGE_KEYS.WORDS]) ? res[STORAGE_KEYS.WORDS] : [];
       if ((!minusWords || minusWords.length === 0) && words && words.length) {
         minusWords = [...words];
@@ -1018,33 +1184,45 @@
 
       isCollapsed = !!res[STORAGE_KEYS.COLLAPSED];
 
+      const savedWidth = res[STORAGE_KEYS.WIDTH];
+      if (savedWidth && typeof savedWidth === "object") {
+        if (typeof savedWidth.width === "number") widgetWidth = Math.max(250, savedWidth.width);
+        hasManualWidth = !!savedWidth.manual;
+      }
+
       const savedSettings = res[STORAGE_KEYS.SETTINGS];
       if (savedSettings && typeof savedSettings === "object") {
         settings = { ...defaultSettings, ...savedSettings };
       }
 
-      // Safety: ensure valid mode
       if (settings.mode !== "phrases" && settings.mode !== "minus") settings.mode = "phrases";
 
       buildWidget();
 
-      // Apply settings checkboxes (widget built after settings loaded)
       const w = document.getElementById("wc-widget");
       if (w) {
         const strip = w.querySelector("#wc-set-stripplus");
         const bang = w.querySelector("#wc-set-bang");
         const plus = w.querySelector("#wc-set-plus");
+        const frequency = w.querySelector("#wc-set-frequency");
+        const copyFrequency = w.querySelector("#wc-set-copy-frequency");
+        const wrapPhrase = w.querySelector("#wc-set-wrap-phrase");
+        const wrapWords = w.querySelector("#wc-set-wrap-words");
         if (strip) strip.checked = !!settings.stripPlusInPhrases;
         if (bang) bang.checked = !!settings.addBangPrefix;
         if (plus) plus.checked = !!settings.addPlusPrefix;
+        if (frequency) frequency.checked = !!settings.includeFrequencyInPhrases;
+        if (copyFrequency) copyFrequency.checked = settings.copyWithFrequency !== false;
+        if (wrapPhrase) wrapPhrase.checked = !!settings.wrapPhraseWithBrackets;
+        if (wrapWords) wrapWords.checked = !!settings.wrapWordsWithBrackets;
         const shift = w.querySelector("#wc-set-shift");
         if (shift) shift.checked = settings.shiftHotkeyEnabled !== false;
       }
 
       scanAndInject();
       installObserver();
+      window.addEventListener("resize", updateWidgetLayout);
 
-      // Shift hotkey: temporary minus-words mode while holding Shift (only in phrases mode)
       window.addEventListener("keydown", (e) => {
         if (!settings.shiftHotkeyEnabled) return;
         if (settings.mode !== "phrases") return;
@@ -1066,7 +1244,6 @@
           updateAllTokensUI();
         }
       }, true);
-  // SPA/navigation hooks
   (function installNavHooks(){
     let lastUrl = location.href;
     const check = () => {
@@ -1075,14 +1252,12 @@
         scheduleScanBurst();
       }
     };
-    // Patch history methods
     const _pushState = history.pushState;
     const _replaceState = history.replaceState;
     history.pushState = function(){ const r=_pushState.apply(this, arguments); check(); return r; };
     history.replaceState = function(){ const r=_replaceState.apply(this, arguments); check(); return r; };
     window.addEventListener('popstate', () => check(), true);
 
-    // When user submits search, run burst (Wordstat may update without URL change immediately)
     document.addEventListener('click', (e) => {
       const t = e.target;
       if (!t) return;
@@ -1092,7 +1267,6 @@
       }
     }, true);
 
-    // Periodic lightweight check (failsafe)
     setInterval(check, 1200);
   })();
 
