@@ -2,12 +2,43 @@
   "manifest_version": 3,
   "name": "Wordstat Yandex Collector",
   "version": "0.4.2",
+<<<<<<< Updated upstream
   "description": "Сбор фраз и минус-слов в Яндекс Wordstat. Данные хранятся локально.",
+=======
+  "description": "Free browser extension for collecting keywords and negative words directly in Yandex Wordstat.",
+
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "wordstat-yandex-collector@fastbrains.yandex.ru",
+      "strict_min_version": "140.0",
+      "data_collection_permissions": {
+        "required": ["none"],
+        "optional": []
+      }
+    }
+  },
+
+  "permissions": ["storage"],
+
+  "host_permissions": ["https://wordstat.yandex.ru/*"],
+
+  "content_scripts": [
+    {
+      "matches": ["https://wordstat.yandex.ru/*"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ],
+
+>>>>>>> Stashed changes
   "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",
     "48": "icons/icon48.png",
+    "96": "icons/icon96.png",
     "128": "icons/icon128.png"
+<<<<<<< Updated upstream
   },
   "permissions": [
     "storage"
@@ -29,4 +60,7 @@
       "run_at": "document_idle"
     }
   ]
+=======
+  }
+>>>>>>> Stashed changes
 }
