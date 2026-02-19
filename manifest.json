@@ -2,9 +2,6 @@
   "manifest_version": 3,
   "name": "Wordstat Yandex Collector",
   "version": "0.4.2",
-<<<<<<< Updated upstream
-  "description": "Сбор фраз и минус-слов в Яндекс Wordstat. Данные хранятся локально.",
-=======
   "description": "Free browser extension for collecting keywords and negative words directly in Yandex Wordstat.",
 
   "browser_specific_settings": {
